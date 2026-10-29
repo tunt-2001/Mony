@@ -1,0 +1,3 @@
+[functions.ingest-sms]
+# The iOS Shortcut authenticates with the x-ingest-token header, not a Supabase JWT.
+verify_jwt = false
