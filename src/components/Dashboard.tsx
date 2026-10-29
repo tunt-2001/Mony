@@ -1,17 +1,31 @@
 import { useState } from 'react';
 import type { Transaction } from '../lib/supabase';
-import { formatVnd, shortDay, dayKey, timeLabel } from '../lib/format';
+import { formatVnd, shortDay, dayKey, sourceLabel, timeLabel } from '../lib/format';
 import { FlowChart } from './FlowChart';
 import type { Period } from '../lib/period';
 import { periodStats, totals } from '../lib/stats';
 import { IconIn, IconOut } from './Icons';
 import { TxDetail } from './TxDetail';
+import { TransactionForm } from './TransactionForm';
+import type { Gap } from '../lib/ledger';
 
 interface Props {
   period: Period;
   txs: Transaction[];
   prevTxs: Transaction[];
+  transfers: Map<string, string | null>;
+  gaps: Gap[];
   onChange: () => void;
+}
+
+const DISMISSED_KEY = 'gaps.dismissed';
+
+function loadDismissed(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
 }
 
 /** "▲ 12% so với kỳ trước" or null when there is nothing to compare against. */
@@ -22,10 +36,13 @@ function compare(now: number, before: number): string | null {
   return `${pct > 0 ? '▲' : '▼'} ${Math.abs(pct)}% so với kỳ trước`;
 }
 
-export function Dashboard({ period, txs, prevTxs, onChange }: Props) {
+export function Dashboard({ period, txs: all, prevTxs, transfers, gaps, onChange }: Props) {
   const [detail, setDetail] = useState<Transaction | null>(null);
+  // Own transfers are moves, not income or spending.
+  const txs = all.filter((t) => !transfers.has(t.id));
+  const transferCount = all.length - txs.length;
   const s = periodStats(txs, period);
-  const prev = totals(prevTxs);
+  const prev = totals(prevTxs.filter((t) => !transfers.has(t.id)));
   const net = s.income - s.spent;
   const showChart = s.buckets.length > 1;
 
@@ -57,7 +74,10 @@ export function Dashboard({ period, txs, prevTxs, onChange }: Props) {
             </small>
           </div>
         </div>
+        {transferCount > 0 && <p className="hero-note">Không tính {transferCount} khoản chuyển giữa các tài khoản của bạn</p>}
       </section>
+
+      <GapCard gaps={gaps} onChange={onChange} />
 
       {txs.length === 0 && <p className="empty">Không có giao dịch trong khoảng thời gian này.</p>}
 
@@ -88,8 +108,9 @@ export function Dashboard({ period, txs, prevTxs, onChange }: Props) {
       {detail && (
         <TxDetail
           tx={detail}
+          transfers={transfers}
           onClose={() => setDetail(null)}
-          onDeleted={() => {
+          onChanged={() => {
             setDetail(null);
             onChange();
           }}
@@ -121,6 +142,78 @@ function TopList(props: { title: string; kind: 'in' | 'out'; items: Transaction[
           ))}
         </ol>
       )}
+    </section>
+  );
+}
+
+const when = (iso: string) => `${timeLabel(iso)} ${shortDay(dayKey(iso), false)}`;
+
+/** Balance mismatches: SMS that never reached the app. Fill them by hand or dismiss them on this phone. */
+function GapCard({ gaps, onChange }: { gaps: Gap[]; onChange: () => void }) {
+  const [dismissed, setDismissed] = useState(loadDismissed);
+  const [filling, setFilling] = useState<string | null>(null);
+  const open = gaps.filter((g) => !dismissed.includes(g.id));
+  if (open.length === 0) return null;
+
+  function dismiss(id: string) {
+    const next = [...dismissed, id];
+    setDismissed(next);
+    try {
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+    } catch {
+      // Private mode: dismissal lasts until reload.
+    }
+  }
+
+  return (
+    <section className="card gap-card">
+      <h2>Có thể thiếu giao dịch</h2>
+      <p className="muted small">Số dư trong SMS không khớp, nghĩa là có giao dịch chưa vào app. Đối chiếu với app ngân hàng rồi thêm vào.</p>
+      <ul className="gap-list">
+        {open.map((g) => (
+          <li key={g.id}>
+            <div className="gap-row">
+              <span className="gap-text">
+                <strong className="ellipsis">
+                  {sourceLabel({ source: 'sms', bank: g.bank })} {g.account}
+                </strong>
+                <small className="muted">
+                  Từ {when(g.after)} đến {when(g.next.occurred_at)}
+                </small>
+              </span>
+              <span className={`num amount ${g.amount > 0 ? 'in' : 'out'}`}>
+                {g.amount > 0 ? '+' : '−'}
+                {formatVnd(Math.abs(g.amount))}
+              </span>
+            </div>
+            {filling === g.id ? (
+              <TransactionForm
+                preset={{
+                  amount: g.amount,
+                  // Just before the SMS that revealed the gap, so it lands inside it.
+                  when: new Date(Date.parse(g.next.occurred_at) - 60_000).toISOString(),
+                  description: 'Giao dịch không có SMS',
+                  bank: g.bank,
+                  account: g.account,
+                }}
+                onDone={(saved) => {
+                  setFilling(null);
+                  if (saved) onChange();
+                }}
+              />
+            ) : (
+              <div className="gap-actions">
+                <button className="link" onClick={() => dismiss(g.id)}>
+                  Bỏ qua
+                </button>
+                <button className="primary small-btn" onClick={() => setFilling(g.id)}>
+                  Thêm giao dịch này
+                </button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

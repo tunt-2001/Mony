@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "deploy": "npm run build && npx wrangler pages deploy dist --project-name chi-tieu --branch main"
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name quanly-chitieu --branch main"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

@@ -19,6 +19,8 @@ export interface Transaction {
   category: string;
   source: 'sms' | 'manual';
   raw_message_id: string | null;
+  /** Own-account transfer override: null = detect automatically. */
+  transfer: boolean | null;
 }
 
 export interface RawMessage {

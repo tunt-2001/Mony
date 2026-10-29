@@ -8,6 +8,7 @@ import { Transactions } from './components/Transactions';
 import { PeriodFilter } from './components/PeriodFilter';
 import { IconChart, IconList, IconSettings } from './components/Icons';
 import { Settings } from './components/Settings';
+import { findGaps, findTransfers, type Gap } from './lib/ledger';
 
 type Tab = 'dashboard' | 'transactions';
 
@@ -41,6 +42,8 @@ function Main() {
   const [period, setPeriod] = useState<Period>(() => presetPeriod('month'));
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [prevTxs, setPrevTxs] = useState<Transaction[]>([]);
+  const [transfers, setTransfers] = useState<Map<string, string | null>>(new Map());
+  const [gaps, setGaps] = useState<Gap[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -60,6 +63,9 @@ function Main() {
     const all = data as Transaction[];
     // Compare instants, not strings: Postgres and JS format timestamps differently.
     const startMs = Date.parse(start);
+    // Pair and chain over everything loaded, so a transfer or gap straddling the period start is still seen.
+    setTransfers(findTransfers(all));
+    setGaps(findGaps(all).filter((g) => Date.parse(g.next.occurred_at) >= startMs));
     setTxs(all.filter((t) => Date.parse(t.occurred_at) >= startMs));
     setPrevTxs(all.filter((t) => Date.parse(t.occurred_at) < startMs));
   }, [period]);
@@ -95,9 +101,9 @@ function Main() {
         {loading ? (
           <p className="empty">Đang tải…</p>
         ) : tab === 'dashboard' ? (
-          <Dashboard period={period} txs={txs} prevTxs={prevTxs} onChange={load} />
+          <Dashboard period={period} txs={txs} prevTxs={prevTxs} transfers={transfers} gaps={gaps} onChange={load} />
         ) : (
-          <Transactions txs={txs} onChange={load} />
+          <Transactions txs={txs} transfers={transfers} onChange={load} />
         )}
       </main>
 

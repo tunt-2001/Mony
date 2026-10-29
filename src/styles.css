@@ -1131,3 +1131,99 @@ label {
   background: var(--surface);
   font-size: 13px;
 }
+
+/* ---------- Own transfers & balance gaps ---------- */
+.hero-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.note {
+  margin: -4px 2px 12px;
+}
+
+.ledger-row.transfer .num,
+.ledger-row.transfer .ellipsis {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+.tag.transfer {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.transfer-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  font-size: 14px;
+}
+
+.transfer-box p {
+  margin: 0;
+}
+
+.gap-card {
+  border: 1px solid color-mix(in srgb, var(--out) 35%, transparent);
+}
+
+.gap-card > p {
+  margin: 0 0 10px;
+}
+
+.gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gap-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.gap-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gap-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gap-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+}
+
+.small-btn {
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.gap-list .form {
+  padding: 12px;
+  box-shadow: none;
+}

@@ -1,20 +1,35 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Transaction } from '../lib/supabase';
-import { formatVnd, sourceLabel, TZ } from '../lib/format';
+import { formatVnd, shortDay, dayKey, sourceLabel, timeLabel, TZ } from '../lib/format';
 
 interface Props {
   tx: Transaction;
+  transfers: Map<string, string | null>;
   onClose: () => void;
-  onDeleted: () => void;
+  /** After a delete or a transfer toggle: the list must reload. */
+  onChanged: () => void;
 }
 
 const fullTime = (iso: string) =>
   new Intl.DateTimeFormat('vi-VN', { timeZone: TZ, dateStyle: 'full', timeStyle: 'short' }).format(new Date(iso));
 
 /** Bottom sheet with one transaction in full, including the original SMS. */
-export function TxDetail({ tx, onClose, onDeleted }: Props) {
+export function TxDetail({ tx, transfers, onClose, onChanged }: Props) {
   const [sms, setSms] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [partner, setPartner] = useState<Transaction | null>(null);
+  const isTransfer = transfers.has(tx.id);
+  const partnerId = transfers.get(tx.id) ?? null;
+
+  useEffect(() => {
+    if (!partnerId) return;
+    supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', partnerId)
+      .maybeSingle()
+      .then(({ data }) => setPartner(data as Transaction | null));
+  }, [partnerId]);
 
   useEffect(() => {
     if (!tx.raw_message_id) return;
@@ -38,7 +53,14 @@ export function TxDetail({ tx, onClose, onDeleted }: Props) {
   async function remove() {
     if (!confirm(`Xóa giao dịch ${formatVnd(tx.amount)}?`)) return;
     await supabase.from('transactions').delete().eq('id', tx.id);
-    onDeleted();
+    onChanged();
+  }
+
+  async function setTransfer(on: boolean) {
+    // Unmarking an automatic pair must unmark both halves, or the other one stays excluded alone.
+    const ids = on ? [tx.id] : [tx.id, ...(partnerId ? [partnerId] : [])];
+    await supabase.from('transactions').update({ transfer: on }).in('id', ids);
+    onChanged();
   }
 
   const kind = tx.amount > 0 ? 'in' : 'out';
@@ -48,7 +70,9 @@ export function TxDetail({ tx, onClose, onDeleted }: Props) {
       <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
         <header className="sheet-head">
-          <span className={`tag ${kind}`}>{kind === 'in' ? 'Tiền nhận' : 'Tiền chi'}</span>
+          <span className={`tag ${isTransfer ? 'transfer' : kind}`}>
+            {isTransfer ? 'Chuyển nội bộ' : kind === 'in' ? 'Tiền nhận' : 'Tiền chi'}
+          </span>
           <button className="link" onClick={onClose}>
             Đóng
           </button>
@@ -77,6 +101,33 @@ export function TxDetail({ tx, onClose, onDeleted }: Props) {
           <dt>Nội dung</dt>
           <dd>{tx.description || '(không có nội dung)'}</dd>
         </dl>
+        <div className={`transfer-box${isTransfer ? ' on' : ''}`}>
+          {isTransfer ? (
+            <>
+              <p>
+                Chuyển giữa các tài khoản của bạn nên <b>không tính</b> vào nhận/chi.
+                {partner && (
+                  <>
+                    {' '}
+                    Khớp với {partner.amount > 0 ? '+' : '−'}
+                    {formatVnd(Math.abs(partner.amount))} ở {sourceLabel(partner)} {partner.account ?? ''} lúc{' '}
+                    {timeLabel(partner.occurred_at)} {shortDay(dayKey(partner.occurred_at), false)}.
+                  </>
+                )}
+              </p>
+              <button className="link" onClick={() => setTransfer(false)}>
+                Không phải chuyển nội bộ
+              </button>
+            </>
+          ) : (
+            <>
+              <p>Đây là tiền chuyển qua lại giữa các tài khoản của bạn?</p>
+              <button className="link" onClick={() => setTransfer(true)}>
+                Đánh dấu chuyển nội bộ
+              </button>
+            </>
+          )}
+        </div>
         {tx.raw_message_id && (
           <>
             <p className="section-label">Tin nhắn gốc</p>

@@ -3,16 +3,26 @@ import { categorize } from '../../supabase/functions/_shared/categorize.ts';
 import { supabase } from '../lib/supabase';
 import { fromLocalInput, toLocalInput } from '../lib/format';
 
+/** Prefill, e.g. when filling a balance gap: the entry then belongs to that account's chain. */
+export interface FormPreset {
+  amount: number; // signed
+  when: string; // ISO
+  description: string;
+  bank: string;
+  account: string;
+}
+
 interface Props {
+  preset?: FormPreset;
   onDone: (saved: boolean) => void;
 }
 
 /** Manual entry, e.g. for cash or an SMS that never arrived. */
-export function TransactionForm({ onDone }: Props) {
-  const [kind, setKind] = useState<'out' | 'in'>('out');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [when, setWhen] = useState(toLocalInput(new Date().toISOString()));
+export function TransactionForm({ preset, onDone }: Props) {
+  const [kind, setKind] = useState<'out' | 'in'>(preset && preset.amount > 0 ? 'in' : 'out');
+  const [amount, setAmount] = useState(preset ? Math.abs(preset.amount).toLocaleString('vi-VN') : '');
+  const [description, setDescription] = useState(preset?.description ?? '');
+  const [when, setWhen] = useState(toLocalInput(preset?.when ?? new Date().toISOString()));
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
@@ -28,6 +38,7 @@ export function TransactionForm({ onDone }: Props) {
       // The column is still required; the UI no longer shows categories.
       category: categorize(description, signed),
       source: 'manual',
+      ...(preset && { bank: preset.bank, account: preset.account }),
     });
     if (error) return setError(error.message);
     onDone(true);

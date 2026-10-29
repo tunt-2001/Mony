@@ -9,20 +9,24 @@ import { IconIn, IconOut, IconPlus, IconSearch } from './Icons';
 
 interface Props {
   txs: Transaction[];
+  transfers: Map<string, string | null>;
   onChange: () => void;
 }
 
 const normalize = (s: string) => stripAccents(s).toLowerCase();
 
 /** Ledger: one row per transaction, money in and money out in separate columns. */
-export function Transactions({ txs, onChange }: Props) {
+export function Transactions({ txs, transfers, onChange }: Props) {
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [detail, setDetail] = useState<Transaction | null>(null);
 
   const q = normalize(query.trim());
   const visible = q ? txs.filter((t) => normalize(t.description).includes(q)) : txs;
-  const sum = totals(visible);
+  // Own transfers stay listed but are left out of every total.
+  const counted = (items: Transaction[]) => items.filter((t) => !transfers.has(t.id));
+  const sum = totals(counted(visible));
+  const transferCount = visible.length - counted(visible).length;
 
   const days = new Map<string, Transaction[]>();
   for (const t of visible) {
@@ -46,6 +50,9 @@ export function Transactions({ txs, onChange }: Props) {
           <strong className="num">{formatVnd(sum.spent)}</strong>
         </div>
       </section>
+      {transferCount > 0 && (
+        <p className="muted small note">Không tính {transferCount} khoản chuyển giữa các tài khoản của bạn (in mờ bên dưới).</p>
+      )}
 
       <div className="toolbar">
         <label className="search">
@@ -87,7 +94,7 @@ export function Transactions({ txs, onChange }: Props) {
           </div>
 
           {[...days].map(([day, items]) => {
-            const d = totals(items);
+            const d = totals(counted(items));
             return (
               <div key={day} role="rowgroup">
                 <div className="ledger-day" role="row">
@@ -100,11 +107,17 @@ export function Transactions({ txs, onChange }: Props) {
                   </span>
                 </div>
                 {items.map((t) => (
-                  <button key={t.id} className="ledger-row" role="row" onClick={() => setDetail(t)}>
+                  <button
+                    key={t.id}
+                    className={`ledger-row${transfers.has(t.id) ? ' transfer' : ''}`}
+                    role="row"
+                    onClick={() => setDetail(t)}
+                  >
                     <span role="cell" className="ledger-desc">
                       <span className="ellipsis">{t.description || '(không có nội dung)'}</span>
                       <small>
                         {timeLabel(t.occurred_at)} · {sourceLabel(t)}
+                        {transfers.has(t.id) && ' · Chuyển nội bộ'}
                       </small>
                     </span>
                     <span role="cell" className="num in">
@@ -124,8 +137,9 @@ export function Transactions({ txs, onChange }: Props) {
       {detail && (
         <TxDetail
           tx={detail}
+          transfers={transfers}
           onClose={() => setDetail(null)}
-          onDeleted={() => {
+          onChanged={() => {
             setDetail(null);
             onChange();
           }}

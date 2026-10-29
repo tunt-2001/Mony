@@ -26,7 +26,7 @@ Mọi thứ chạy trên gói miễn phí, làm hoàn toàn trên Windows, khôn
 ## 1. Tạo Supabase
 
 1. Đăng ký tại https://supabase.com → **New project**. Chọn region **Singapore**.
-2. **SQL Editor** → lần lượt dán và **Run** `supabase/migrations/0001_init.sql`, rồi `0002_ingest_tokens.sql`.
+2. **SQL Editor** → lần lượt dán và **Run** `supabase/migrations/0001_init.sql`, rồi `0002_ingest_tokens.sql`, rồi `0003_transfer_flag.sql`.
 3. **Authentication → Users → Add user → Create new user**: nhập email + mật khẩu, tích **Auto Confirm User** → **Create user**. Mỗi người trong nhà một tài khoản.
 4. **Authentication → Sign In / Providers**: tắt **Allow new users to sign up** → **Save**, để không ai khác tạo được tài khoản.
 5. **Project Settings → API**: copy `Project URL` và `anon public key`.
@@ -82,16 +82,16 @@ Kết quả mong đợi là `{"status":"parsed",...}`, và giao dịch hiện tr
 2. Tạo project (chỉ làm một lần):
 
    ```bash
-   npx wrangler pages project create chi-tieu --production-branch main
+   npx wrangler pages project create quanly-chitieu --production-branch main --force
    ```
 
-3. Build và đưa lên mạng (chạy lại mỗi khi sửa code). Lệnh này build bằng file `.env` trên máy và in ra link dạng `https://chi-tieu-xxx.pages.dev`:
+3. Build và đưa lên mạng (chạy lại mỗi khi sửa code). Lệnh này build bằng file `.env` trên máy và đưa lên https://quanly-chitieu.pages.dev:
 
    ```bash
    npm run deploy
    ```
 
-4. Trên iPhone, mở link `https://chi-tieu-xxx.pages.dev` bằng **Safari** (không dùng Chrome) → nút **Chia sẻ** → **Thêm vào MH chính**.
+4. Trên iPhone, mở https://quanly-chitieu.pages.dev bằng **Safari** (không dùng Chrome) → nút **Chia sẻ** → **Thêm vào MH chính**.
 5. Mở app từ màn hình chính và đăng nhập một lần (PWA có phiên đăng nhập riêng, tách với Safari). iPhone sẽ đề nghị lưu mật khẩu vào Keychain.
 
 ## 5. Tạo Tự động hóa trên iPhone
@@ -130,4 +130,6 @@ Nếu có test fail, sửa regex trong `smsParser.ts` rồi deploy lại functio
 - **Tổng quan**: chênh lệch thu – chi, tổng nhận, tổng chi (so với kỳ trước cùng độ dài), biểu đồ nhận/chi theo ngày (hoặc theo tháng khi khoảng thời gian dài hơn 62 ngày), 5 khoản nhận và 5 khoản chi lớn nhất.
 - **Giao dịch**: sổ 2 cột Nhận / Chi, nhóm theo ngày, có tìm kiếm theo nội dung và nút **+ Thêm** để nhập tay.
 - Bấm vào bất kỳ giao dịch nào để xem chi tiết, tin nhắn SMS gốc và nút xóa.
+- **Chuyển nội bộ**: một khoản chi và một khoản nhận cùng số tiền, ở hai tài khoản khác nhau, cách nhau dưới 15 phút được coi là chuyển giữa các tài khoản của bạn. Chúng vẫn hiện trong sổ (in mờ, gạch ngang) nhưng không tính vào tổng nhận/chi. Nếu app ghép nhầm, hoặc bỏ sót (ví dụ chuyển sang ví không có SMS), mở chi tiết giao dịch để đổi.
+- **Có thể thiếu giao dịch**: số dư trước + số tiền giao dịch phải bằng số dư sau. Nếu hai SMS liên tiếp của cùng một tài khoản không khớp, Tổng quan hiện số tiền bị thiếu và khoảng thời gian. Bấm **Thêm giao dịch này** để nhập tay (đã điền sẵn), hoặc **Bỏ qua** (chỉ ẩn trên máy đang dùng).
 - SMS mà bộ đọc không hiểu vẫn được lưu trong bảng `raw_messages` (status `failed`), nhưng app không hiển thị chúng.
