@@ -21,6 +21,8 @@ export interface Transaction {
   raw_message_id: string | null;
   /** Own-account transfer override: null = detect automatically. */
   transfer: boolean | null;
+  /** The user's own words for it; shown instead of the SMS description when set. */
+  note: string | null;
 }
 
 export interface RawMessage {

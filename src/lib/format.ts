@@ -28,6 +28,11 @@ export function sourceLabel(t: { source: string; bank: string }): string {
   return BANK_NAMES[t.bank] ?? 'SMS';
 }
 
+/** What a list shows for a transaction: the user's note if any, else the SMS description. */
+export function txTitle(t: { note?: string | null; description: string }): string {
+  return t.note?.trim() || t.description || '(không có nội dung)';
+}
+
 /** "YYYY-MM-DD" of a timestamp in Vietnam time. */
 export function dayKey(iso: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(

@@ -12,6 +12,7 @@ export interface PushMessage {
   title: string;
   body: string;
   tag: string; // same tag replaces an older notification instead of stacking
+  url?: string; // opened when the notification is tapped (default: the app's start page)
 }
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -116,5 +117,66 @@ export function weeklySummary(txs: LedgerTx[], settings: Pick<AlertSettings, 'mo
     title: `Tóm tắt tuần ${day(from + 3600_000)} – ${day(now.getTime())}`,
     body: parts.join(' · '),
     tag: 'weekly',
+  };
+}
+
+/** "1,2tr" / "800k": compact amounts for a notification line. */
+export function shortVnd(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `${String(Math.round(a / 100_000) / 10).replace('.', ',')}tr`;
+  if (a >= 1_000) return `${Math.round(a / 1_000)}k`;
+  return `${a}đ`;
+}
+
+/**
+ * Report on the month that just ended (relative to `now`), compared with the month before it.
+ * `txs` must reach back to the start of that earlier month. Null when the month had no transactions.
+ */
+export function monthlyReport(txs: (LedgerTx & { category: string })[], now: Date): PushMessage | null {
+  const thisStart = Date.parse(vnMonthStart(now));
+  const month = vnMonth(new Date(thisStart - 1).toISOString());
+  const before = vnMonth(new Date(Date.parse(vnMonthStart(new Date(thisStart - 1))) - 1).toISOString());
+  const transfers = findTransfers(txs);
+
+  let income = 0;
+  let count = 0;
+  const spent = { [month]: 0, [before]: 0 } as Record<string, number>;
+  const byCat = { [month]: new Map<string, number>(), [before]: new Map<string, number>() } as Record<string, Map<string, number>>;
+  for (const t of txs) {
+    if (transfers.has(t.id)) continue;
+    const m = vnMonth(t.occurred_at);
+    if (m !== month && m !== before) continue;
+    if (m === month) count++;
+    if (t.amount > 0) {
+      if (m === month) income += t.amount;
+      continue;
+    }
+    spent[m] -= t.amount;
+    byCat[m].set(t.category, (byCat[m].get(t.category) ?? 0) - t.amount);
+  }
+  if (count === 0) return null;
+
+  const label = (m: string) => `T${Number(m.slice(5))}`;
+  let line = `Chi ${vnd(spent[month])}`;
+  if (spent[before] > 0) {
+    const pct = Math.round(((spent[month] - spent[before]) / spent[before]) * 100);
+    line += pct === 0 ? ` (bằng ${label(before)})` : ` (${pct > 0 ? '▲' : '▼'}${Math.abs(pct)}% so với ${label(before)})`;
+  }
+  line += ` · Nhận ${vnd(income)}`;
+
+  const rises = [...byCat[month]]
+    .map(([category, total]) => ({ category, diff: total - (byCat[before].get(category) ?? 0) }))
+    .filter((r) => r.diff > 0)
+    .sort((a, b) => b.diff - a.diff)
+    .slice(0, 3);
+  if (spent[before] > 0 && rises.length) {
+    line += `. Tăng nhiều: ${rises.map((r) => `${r.category} +${shortVnd(r.diff)}`).join(', ')}`;
+  }
+
+  return {
+    title: `Báo cáo tháng ${Number(month.slice(5))}/${month.slice(0, 4)}`,
+    body: line,
+    tag: `monthly-${month}`,
+    url: '/?period=lastMonth',
   };
 }

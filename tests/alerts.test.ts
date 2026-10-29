@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertsFor, vnMonthStart, weeklySummary, type AlertSettings } from '../supabase/functions/_shared/alerts.ts';
+import { alertsFor, monthlyReport, vnMonthStart, weeklySummary, type AlertSettings } from '../supabase/functions/_shared/alerts.ts';
 
 let n = 0;
 const tx = (p: { amount: number; occurred_at: string; balance?: number | null; bank?: string; account?: string }) => ({
@@ -78,5 +78,38 @@ describe('weeklySummary', () => {
       body: 'Chi 3.200.000 ₫ · Nhận 15.000.000 ₫ · Tháng 11 đã chi 20% hạn mức',
       tag: 'weekly',
     });
+  });
+});
+
+describe('monthlyReport', () => {
+  const c = (amount: number, occurred_at: string, category: string, more = {}) => ({ ...tx({ amount, occurred_at, ...more }), category });
+
+  it('compares the month that just ended with the one before and lists the biggest rises', () => {
+    const txs = [
+      c(-1_000_000, '2026-09-10T03:00:00Z', 'Ăn uống'),
+      c(-2_000_000, '2026-09-12T03:00:00Z', 'Mua sắm'),
+      c(-2_200_000, '2026-10-05T03:00:00Z', 'Ăn uống'),
+      c(-1_500_000, '2026-10-06T03:00:00Z', 'Mua sắm'),
+      c(-300_000, '2026-10-07T03:00:00Z', 'Di chuyển'),
+      c(15_000_000, '2026-10-25T03:00:00Z', 'Lương'),
+      // Own transfer: ignored on both sides.
+      c(-5_000_000, '2026-10-20T03:00:00Z', 'Khác'),
+      c(5_000_000, '2026-10-20T03:01:00Z', 'Khác', { bank: 'TCB', account: '1903xxx123' }),
+      // Already November: not part of the report.
+      c(-9_000_000, '2026-10-31T18:00:00Z', 'Mua sắm'),
+    ];
+    expect(monthlyReport(txs, new Date('2026-11-01T01:00:00Z'))).toEqual({
+      title: 'Báo cáo tháng 10/2026',
+      body: 'Chi 4.000.000 ₫ (▲33% so với T9) · Nhận 15.000.000 ₫. Tăng nhiều: Ăn uống +1,2tr, Di chuyển +300k',
+      tag: 'monthly-2026-10',
+      url: '/?period=lastMonth',
+    });
+  });
+
+  it('skips a month without transactions and works across the year boundary', () => {
+    expect(monthlyReport([], new Date('2027-01-01T01:00:00Z'))).toBeNull();
+    const r = monthlyReport([c(-100_000, '2026-12-03T03:00:00Z', 'Ăn uống')], new Date('2027-01-01T01:00:00Z'));
+    expect(r?.title).toBe('Báo cáo tháng 12/2026');
+    expect(r?.body).toBe('Chi 100.000 ₫ · Nhận 0 ₫');
   });
 });

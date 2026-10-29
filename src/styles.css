@@ -1398,3 +1398,177 @@ input.switch:focus-visible {
 .diag {
   font-size: 11px;
 }
+
+/* ---------- Categories ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.cat-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.form .cat-picker {
+  margin-bottom: 0;
+}
+
+.cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cat-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.cat-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.segmented.mini {
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.segmented.mini button {
+  padding: 4px 14px;
+  font-size: 13px;
+}
+
+.cat-list,
+.cat-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  width: 100%;
+  padding: 9px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.cat-list > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.cat-name {
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.cat-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cat-value small {
+  font-weight: 500;
+}
+
+.cat-track {
+  grid-column: 1 / -1;
+  height: 8px;
+}
+
+.cat-bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+
+.cat-bar.out {
+  background: var(--out-fill);
+}
+
+.cat-bar.in {
+  background: var(--in-fill);
+}
+
+.cat-items {
+  margin: 0 0 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.cat-items button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.cat-items li + li {
+  border-top: 1px solid var(--border);
+}
+
+/* Small pulsing dot while fresh data loads behind what is already shown. */
+.sync-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: sync-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes sync-pulse {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-dot {
+    animation: none;
+  }
+}
+
+.chart-placeholder {
+  height: 290px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.note-field {
+  margin-bottom: 16px;
+}
+
+.note-field > span {
+  font-weight: 600;
+  color: var(--muted);
+}

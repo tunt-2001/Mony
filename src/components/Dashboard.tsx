@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { Transaction } from '../lib/supabase';
-import { formatVnd, shortDay, dayKey, sourceLabel, timeLabel } from '../lib/format';
-import { FlowChart } from './FlowChart';
+import { formatVnd, shortDay, dayKey, sourceLabel, timeLabel, txTitle } from '../lib/format';
+// Recharts is most of the bundle: load it after the numbers are on screen.
+const FlowChart = lazy(() => import('./FlowChart').then((m) => ({ default: m.FlowChart })));
 import type { Period } from '../lib/period';
 import { periodStats, totals } from '../lib/stats';
 import { IconIn, IconOut } from './Icons';
@@ -9,6 +10,7 @@ import { TxDetail } from './TxDetail';
 import { TransactionForm } from './TransactionForm';
 import type { Gap } from '../lib/ledger';
 import { LimitCard, type Budget } from './LimitCard';
+import { CategoryCard } from './CategoryCard';
 
 interface Props {
   period: Period;
@@ -98,9 +100,13 @@ export function Dashboard({ period, txs: all, prevTxs, transfers, gaps, budget, 
               </span>
             </div>
           </div>
-          <FlowChart buckets={s.buckets} monthly={s.monthly} />
+          <Suspense fallback={<div className="chart-placeholder" />}>
+            <FlowChart buckets={s.buckets} monthly={s.monthly} />
+          </Suspense>
         </section>
       )}
+
+      {txs.length > 0 && <CategoryCard txs={txs} onPick={setDetail} />}
 
       {txs.length > 0 && (
         <div className="top-grid">
@@ -114,6 +120,7 @@ export function Dashboard({ period, txs: all, prevTxs, transfers, gaps, budget, 
           tx={detail}
           transfers={transfers}
           onClose={() => setDetail(null)}
+          onEdited={onChange}
           onChanged={() => {
             setDetail(null);
             onChange();
@@ -136,7 +143,7 @@ function TopList(props: { title: string; kind: 'in' | 'out'; items: Transaction[
             <li key={t.id} className="clickable" onClick={() => props.onPick(t)}>
               <span className={`badge-icon ${props.kind}`}>{props.kind === 'in' ? <IconIn size={14} /> : <IconOut size={14} />}</span>
               <span className="top-text">
-                <span className="ellipsis">{t.description || '(không có nội dung)'}</span>
+                <span className="ellipsis">{txTitle(t)}</span>
                 <small className="muted">
                   {shortDay(dayKey(t.occurred_at), false)} · {timeLabel(t.occurred_at)}
                 </small>

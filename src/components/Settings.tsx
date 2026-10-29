@@ -399,6 +399,12 @@ function PushSettings(props: {
                   onChange={(v) => onChange({ notify_gaps: v })}
                 />
                 <Toggle
+                  label="Báo cáo tháng"
+                  hint="8:00 sáng ngày 1, so với tháng trước"
+                  checked={prefs.notify_monthly}
+                  onChange={(v) => onChange({ notify_monthly: v })}
+                />
+                <Toggle
                   label="Tóm tắt tuần"
                   hint="20:00 tối Chủ nhật"
                   checked={prefs.notify_weekly}

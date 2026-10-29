@@ -8,6 +8,7 @@ export interface UserSettings {
   big_spend_threshold: number | null;
   notify_gaps: boolean;
   notify_weekly: boolean;
+  notify_monthly: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -16,12 +17,13 @@ export const DEFAULT_SETTINGS: UserSettings = {
   big_spend_threshold: null,
   notify_gaps: true,
   notify_weekly: false,
+  notify_monthly: true,
 };
 
 export async function loadSettings(): Promise<UserSettings> {
   const { data } = await supabase
     .from('user_settings')
-    .select('monthly_limit, notify_limit, big_spend_threshold, notify_gaps, notify_weekly')
+    .select('monthly_limit, notify_limit, big_spend_threshold, notify_gaps, notify_weekly, notify_monthly')
     .maybeSingle();
   return { ...DEFAULT_SETTINGS, ...(data ?? {}) };
 }

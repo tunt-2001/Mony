@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { stripAccents } from '../../supabase/functions/_shared/smsParser.ts';
 import type { Transaction } from '../lib/supabase';
-import { dayKey, dayLabel, formatNumber, formatVnd, sourceLabel, timeLabel } from '../lib/format';
+import { dayKey, dayLabel, formatNumber, formatVnd, sourceLabel, timeLabel, txTitle } from '../lib/format';
 import { totals } from '../lib/stats';
 import { TransactionForm } from './TransactionForm';
 import { TxDetail } from './TxDetail';
@@ -22,7 +22,7 @@ export function Transactions({ txs, transfers, onChange }: Props) {
   const [detail, setDetail] = useState<Transaction | null>(null);
 
   const q = normalize(query.trim());
-  const visible = q ? txs.filter((t) => normalize(t.description).includes(q)) : txs;
+  const visible = q ? txs.filter((t) => normalize(`${t.note ?? ''} ${t.description} ${t.category}`).includes(q)) : txs;
   // Own transfers stay listed but are left out of every total.
   const counted = (items: Transaction[]) => items.filter((t) => !transfers.has(t.id));
   const sum = totals(counted(visible));
@@ -59,10 +59,10 @@ export function Transactions({ txs, transfers, onChange }: Props) {
           <IconSearch />
           <input
             type="search"
-            placeholder="Tìm theo nội dung"
+            placeholder="Tìm theo nội dung, ghi chú, danh mục"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="Tìm theo nội dung"
+            aria-label="Tìm theo nội dung, ghi chú hoặc danh mục"
           />
         </label>
         <button className="primary add-btn" onClick={() => setAdding(true)} aria-label="Thêm giao dịch">
@@ -114,10 +114,10 @@ export function Transactions({ txs, transfers, onChange }: Props) {
                     onClick={() => setDetail(t)}
                   >
                     <span role="cell" className="ledger-desc">
-                      <span className="ellipsis">{t.description || '(không có nội dung)'}</span>
+                      <span className="ellipsis">{txTitle(t)}</span>
                       <small>
                         {timeLabel(t.occurred_at)} · {sourceLabel(t)}
-                        {transfers.has(t.id) && ' · Chuyển nội bộ'}
+                        {transfers.has(t.id) ? ' · Chuyển nội bộ' : ` · ${t.category}`}
                       </small>
                     </span>
                     <span role="cell" className="num in">
@@ -139,6 +139,7 @@ export function Transactions({ txs, transfers, onChange }: Props) {
           tx={detail}
           transfers={transfers}
           onClose={() => setDetail(null)}
+          onEdited={onChange}
           onChanged={() => {
             setDetail(null);
             onChange();

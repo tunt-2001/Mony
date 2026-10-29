@@ -20,6 +20,27 @@ export interface PeriodStats {
   topOut: Transaction[];
 }
 
+export interface CategoryTotal {
+  category: string;
+  total: number; // positive
+  items: Transaction[]; // largest first
+}
+
+/** Money out (or in) per category, largest first. Pass transactions with own transfers already removed. */
+export function byCategory(txs: Transaction[], kind: 'in' | 'out'): CategoryTotal[] {
+  const groups = new Map<string, CategoryTotal>();
+  for (const t of txs) {
+    if (kind === 'in' ? t.amount <= 0 : t.amount >= 0) continue;
+    const g = groups.get(t.category) ?? { category: t.category, total: 0, items: [] };
+    g.total += Math.abs(t.amount);
+    g.items.push(t);
+    groups.set(t.category, g);
+  }
+  const list = [...groups.values()].sort((a, b) => b.total - a.total);
+  for (const g of list) g.items.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  return list;
+}
+
 export function totals(txs: Transaction[]) {
   let income = 0;
   let spent = 0;

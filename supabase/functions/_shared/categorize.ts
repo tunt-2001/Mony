@@ -18,7 +18,10 @@ export const EXPENSE_CATEGORIES = [
   'Khác',
 ] as const;
 
-export const INCOME_CATEGORIES = ['Lương', 'Thu nhập khác'] as const;
+export const INCOME_CATEGORIES = ['Lương', 'Thưởng', 'Hoàn tiền', 'Được chuyển tiền', 'Thu nhập khác'] as const;
+
+/** Where a transaction lands when no rule matches; shown as "Khác" in the picker. */
+export const fallbackCategory = (amount: number) => (amount > 0 ? 'Thu nhập khác' : 'Khác');
 
 /** Every category, including the internal-transfer one that statistics ignore. */
 export const ALL_CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES, TRANSFER_CATEGORY];
@@ -99,5 +102,5 @@ export function categorize(description: string, amount: number, userRules: Rule[
       .find((r) => fits(r.category) && matches(normalized, r.pattern));
     if (hit) return hit.category;
   }
-  return isIncome ? 'Thu nhập khác' : 'Khác';
+  return fallbackCategory(amount);
 }

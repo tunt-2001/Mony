@@ -14,6 +14,7 @@ function tx(p: Partial<Transaction> & { amount: number; occurred_at: string }): 
     source: 'sms',
     raw_message_id: null,
     transfer: null,
+    note: null,
     ...p,
   };
 }

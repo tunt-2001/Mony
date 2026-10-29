@@ -1,1 +1,26 @@
-{ "version": "0.0.1", "configurations": [ { "name": "web", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--port", "5173"], "port": 5173 } ] }
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5173"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "dist",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--port",
+        "4173"
+      ],
+      "port": 4173
+    }
+  ]
+}

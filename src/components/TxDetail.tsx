@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Transaction } from '../lib/supabase';
+import { CategoryPicker } from './CategoryPicker';
+import { forgetCustomCategories } from '../lib/categories';
 import { formatVnd, shortDay, dayKey, sourceLabel, timeLabel, TZ } from '../lib/format';
 
 interface Props {
@@ -8,13 +10,20 @@ interface Props {
   onClose: () => void;
   /** After a delete or a transfer toggle: the list must reload. */
   onChanged: () => void;
+  /** After an in-place edit (category): reload the lists but keep the sheet open. */
+  onEdited: () => void;
 }
 
 const fullTime = (iso: string) =>
   new Intl.DateTimeFormat('vi-VN', { timeZone: TZ, dateStyle: 'full', timeStyle: 'short' }).format(new Date(iso));
 
 /** Bottom sheet with one transaction in full, including the original SMS. */
-export function TxDetail({ tx, transfers, onClose, onChanged }: Props) {
+export function TxDetail({ tx, transfers, onClose, onChanged, onEdited }: Props) {
+  const [category, setCategory] = useState(tx.category);
+  const [note, setNote] = useState(tx.note ?? '');
+  const [noteSaved, setNoteSaved] = useState<string | null>(null);
+  const [storedNote, setStoredNote] = useState(tx.note ?? null);
+  const [catError, setCatError] = useState<string | null>(null);
   const [sms, setSms] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [partner, setPartner] = useState<Transaction | null>(null);
@@ -63,6 +72,31 @@ export function TxDetail({ tx, transfers, onClose, onChanged }: Props) {
     onChanged();
   }
 
+  async function changeCategory(next: string) {
+    const before = category;
+    setCategory(next);
+    const { error } = await supabase.from('transactions').update({ category: next }).eq('id', tx.id);
+    if (error) {
+      setCategory(before);
+      return setCatError('Không lưu được danh mục, thử lại.');
+    }
+    setCatError(null);
+    forgetCustomCategories();
+    onEdited();
+  }
+
+  async function saveNote() {
+    const next = note.trim() || null;
+    if (next === storedNote) return;
+    const { error } = await supabase.from('transactions').update({ note: next }).eq('id', tx.id);
+    setNoteSaved(error ? 'Không lưu được, thử lại.' : 'Đã lưu');
+    setTimeout(() => setNoteSaved(null), 1500);
+    if (!error) {
+      setStoredNote(next);
+      onEdited();
+    }
+  }
+
   const kind = tx.amount > 0 ? 'in' : 'out';
 
   return (
@@ -101,6 +135,26 @@ export function TxDetail({ tx, transfers, onClose, onChanged }: Props) {
           <dt>Nội dung</dt>
           <dd>{tx.description || '(không có nội dung)'}</dd>
         </dl>
+        <label className="note-field">
+          <span>
+            Ghi chú {noteSaved && <span className="saved">· {noteSaved}</span>}
+          </span>
+          <input
+            value={note}
+            maxLength={120}
+            placeholder="VD: Tiền điện tháng 10, ăn trưa với bạn…"
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={saveNote}
+            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+          />
+        </label>
+        {!isTransfer && (
+          <>
+            <p className="section-label">Danh mục</p>
+            <CategoryPicker amount={tx.amount} value={category} onChange={changeCategory} />
+            {catError && <p className="error">{catError}</p>}
+          </>
+        )}
         <div className={`transfer-box${isTransfer ? ' on' : ''}`}>
           {isTransfer ? (
             <>
