@@ -9,6 +9,26 @@ import { PeriodFilter } from './components/PeriodFilter';
 import { IconChart, IconList, IconSettings } from './components/Icons';
 import { Settings } from './components/Settings';
 import { findGaps, findTransfers, type Gap } from './lib/ledger';
+import { monthSpent, vnMonth, vnMonthStart } from '../supabase/functions/_shared/alerts.ts';
+import { loadSettingsData, type SettingsData } from './lib/userSettings';
+import { registerServiceWorker } from './lib/push';
+import type { Budget } from './components/LimitCard';
+
+registerServiceWorker();
+
+/** This calendar month against the limit, whatever period the filter shows. Null when no limit is set. */
+async function loadBudget(monthly_limit: number | null): Promise<Budget | null> {
+  if (!monthly_limit) return null;
+  const now = new Date();
+  // A week before the month start, so a transfer straddling it still pairs up.
+  const from = new Date(Date.parse(vnMonthStart(now)) - 7 * 24 * 3600_000).toISOString();
+  const { data } = await supabase
+    .from('transactions')
+    .select('id, occurred_at, amount, balance, bank, account, transfer')
+    .gte('occurred_at', from);
+  const month = vnMonth(now.toISOString());
+  return { limit: monthly_limit, spent: monthSpent(data ?? [], month), month };
+}
 
 type Tab = 'dashboard' | 'transactions';
 
@@ -43,12 +63,19 @@ function Main() {
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [prevTxs, setPrevTxs] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Map<string, string | null>>(new Map());
-  const [gaps, setGaps] = useState<Gap[]>([]);
+  const [gaps, setGaps] = useState<Gap<Transaction>[]>([]);
+  const [budget, setBudget] = useState<Budget | null>(null);
+  const [settingsData, setSettingsData] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
   const load = useCallback(async () => {
+    // Prefetched so the Settings sheet opens already filled in.
+    loadSettingsData().then((d) => {
+      setSettingsData(d);
+      loadBudget(d.prefs.monthly_limit).then(setBudget);
+    });
     const [prevStart] = periodRange(previousPeriod(period));
     const [start, end] = periodRange(period);
     const { data, error } = await supabase
@@ -101,13 +128,21 @@ function Main() {
         {loading ? (
           <p className="empty">Đang tải…</p>
         ) : tab === 'dashboard' ? (
-          <Dashboard period={period} txs={txs} prevTxs={prevTxs} transfers={transfers} gaps={gaps} onChange={load} />
+          <Dashboard period={period} txs={txs} prevTxs={prevTxs} transfers={transfers} gaps={gaps} budget={budget} onChange={load} />
         ) : (
           <Transactions txs={txs} transfers={transfers} onChange={load} />
         )}
       </main>
 
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <Settings
+          initial={settingsData}
+          onClose={() => {
+            setShowSettings(false);
+            load(); // The limit may have changed.
+          }}
+        />
+      )}
 
       <nav className="tabbar">
         <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>

@@ -8,13 +8,15 @@ import { IconIn, IconOut } from './Icons';
 import { TxDetail } from './TxDetail';
 import { TransactionForm } from './TransactionForm';
 import type { Gap } from '../lib/ledger';
+import { LimitCard, type Budget } from './LimitCard';
 
 interface Props {
   period: Period;
   txs: Transaction[];
   prevTxs: Transaction[];
   transfers: Map<string, string | null>;
-  gaps: Gap[];
+  gaps: Gap<Transaction>[];
+  budget: Budget | null;
   onChange: () => void;
 }
 
@@ -36,7 +38,7 @@ function compare(now: number, before: number): string | null {
   return `${pct > 0 ? '▲' : '▼'} ${Math.abs(pct)}% so với kỳ trước`;
 }
 
-export function Dashboard({ period, txs: all, prevTxs, transfers, gaps, onChange }: Props) {
+export function Dashboard({ period, txs: all, prevTxs, transfers, gaps, budget, onChange }: Props) {
   const [detail, setDetail] = useState<Transaction | null>(null);
   // Own transfers are moves, not income or spending.
   const txs = all.filter((t) => !transfers.has(t.id));
@@ -76,6 +78,8 @@ export function Dashboard({ period, txs: all, prevTxs, transfers, gaps, onChange
         </div>
         {transferCount > 0 && <p className="hero-note">Không tính {transferCount} khoản chuyển giữa các tài khoản của bạn</p>}
       </section>
+
+      {budget && <LimitCard budget={budget} />}
 
       <GapCard gaps={gaps} onChange={onChange} />
 
@@ -149,7 +153,7 @@ function TopList(props: { title: string; kind: 'in' | 'out'; items: Transaction[
 const when = (iso: string) => `${timeLabel(iso)} ${shortDay(dayKey(iso), false)}`;
 
 /** Balance mismatches: SMS that never reached the app. Fill them by hand or dismiss them on this phone. */
-function GapCard({ gaps, onChange }: { gaps: Gap[]; onChange: () => void }) {
+function GapCard({ gaps, onChange }: { gaps: Gap<Transaction>[]; onChange: () => void }) {
   const [dismissed, setDismissed] = useState(loadDismissed);
   const [filling, setFilling] = useState<string | null>(null);
   const open = gaps.filter((g) => !dismissed.includes(g.id));

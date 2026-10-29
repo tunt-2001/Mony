@@ -10,9 +10,47 @@
 // public.ingest_tokens. Deploy with --no-verify-jwt: phones authenticate with
 // x-ingest-token, not a Supabase JWT.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { parseBankSms } from '../_shared/smsParser.ts';
 import { categorize, type Rule } from '../_shared/categorize.ts';
+import { alertsFor, vnMonthStart, type AlertSettings } from '../_shared/alerts.ts';
+import { pushToUser } from '../_shared/push.ts';
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
+
+/**
+ * Waits before deciding: the other half of an own-account transfer, or an SMS from the same minute,
+ * usually arrives within this time and changes the answer (no "big spending" for a transfer, no false gap).
+ */
+const SETTLE_MS = 60_000;
+
+async function notifyAfterSettle(db: SupabaseClient, userId: string, txId: string) {
+  const [{ data: settings }, { count }] = await Promise.all([
+    db.from('user_settings').select('*').eq('user_id', userId).maybeSingle(),
+    db.from('push_subscriptions').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+  ]);
+  if (!count) return; // No device wants notifications: skip the wait entirely.
+  await new Promise((r) => setTimeout(r, SETTLE_MS));
+
+  const now = new Date();
+  // This month, plus a week before it so the balance chain and transfer pairs reach across the month start.
+  const from = new Date(Date.parse(vnMonthStart(now)) - 7 * 24 * 3600_000).toISOString();
+  const { data: txs } = await db
+    .from('transactions')
+    .select('id, occurred_at, amount, balance, bank, account, transfer, description')
+    .eq('user_id', userId)
+    .gte('occurred_at', from);
+  const tx = txs?.find((t) => t.id === txId);
+  if (!tx) return; // Deleted in the meantime, or older than the window.
+
+  const prefs: AlertSettings = {
+    monthly_limit: settings?.monthly_limit ?? null,
+    notify_limit: settings?.notify_limit ?? true,
+    big_spend_threshold: settings?.big_spend_threshold ?? null,
+    notify_gaps: settings?.notify_gaps ?? true,
+  };
+  await pushToUser(db, userId, alertsFor(tx, txs!, prefs, now));
+}
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -87,7 +125,7 @@ Deno.serve(async (req) => {
   const category = categorize(parsed.description, parsed.amount, (rules ?? []) as Rule[]);
   const dedupeKey = [parsed.bank, parsed.account, parsed.amount, parsed.balance, parsed.occurredAt].join('|');
 
-  const { error: txError } = await db.from('transactions').insert({
+  const { data: inserted, error: txError } = await db.from('transactions').insert({
     user_id: userId,
     occurred_at: parsed.occurredAt,
     amount: parsed.amount,
@@ -99,13 +137,16 @@ Deno.serve(async (req) => {
     source: 'sms',
     raw_message_id: raw.id,
     dedupe_key: dedupeKey,
-  });
+  }).select('id').single();
 
   if (txError) {
     const duplicate = txError.code === '23505';
     await db.from('raw_messages').update({ status: duplicate ? 'duplicate' : 'failed' }).eq('id', raw.id);
     return duplicate ? json({ status: 'duplicate' }) : json({ error: txError.message }, 500);
   }
+
+  // Answer the phone right away; notifications are worked out in the background.
+  EdgeRuntime.waitUntil(notifyAfterSettle(db, userId, inserted.id).catch((e) => console.error('notify failed', e)));
 
   return json({ status: 'parsed', amount: parsed.amount, category });
 });

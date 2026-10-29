@@ -26,7 +26,7 @@ Mọi thứ chạy trên gói miễn phí, làm hoàn toàn trên Windows, khôn
 ## 1. Tạo Supabase
 
 1. Đăng ký tại https://supabase.com → **New project**. Chọn region **Singapore**.
-2. **SQL Editor** → lần lượt dán và **Run** `supabase/migrations/0001_init.sql`, rồi `0002_ingest_tokens.sql`, rồi `0003_transfer_flag.sql`.
+2. **SQL Editor** → lần lượt dán và **Run** `supabase/migrations/0001_init.sql`, rồi `0002_ingest_tokens.sql`, rồi `0003_transfer_flag.sql`. File `0004_limit_and_push.sql` chạy sau bước 7.
 3. **Authentication → Users → Add user → Create new user**: nhập email + mật khẩu, tích **Auto Confirm User** → **Create user**. Mỗi người trong nhà một tài khoản.
 4. **Authentication → Sign In / Providers**: tắt **Allow new users to sign up** → **Save**, để không ai khác tạo được tài khoản.
 5. **Project Settings → API**: copy `Project URL` và `anon public key`.
@@ -124,6 +124,30 @@ npm test
 
 Nếu có test fail, sửa regex trong `smsParser.ts` rồi deploy lại function (bước 3, lệnh cuối).
 
+## 7. Thông báo đẩy (không bắt buộc)
+
+1. Tạo khóa VAPID (một lần), in ra 2 dòng:
+
+   ```bash
+   node -e "crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign']).then(async k=>{const j=await crypto.subtle.exportKey('jwk',k.privateKey);console.log('VAPID_PUBLIC_KEY='+Buffer.from(await crypto.subtle.exportKey('raw',k.publicKey)).toString('base64url'));console.log('VAPID_PRIVATE_KEY='+j.d)})"
+   ```
+
+2. Lưu 2 dòng đó cùng một chuỗi ngẫu nhiên `CRON_SECRET=...` vào một file tạm, rồi đẩy lên Supabase và xóa file:
+
+   ```bash
+   npx supabase secrets set --env-file push.env
+   ```
+
+3. Thêm `VITE_VAPID_PUBLIC_KEY=<giá trị VAPID_PUBLIC_KEY>` vào `.env`.
+4. **SQL Editor**: chạy `select vault.create_secret('<CRON_SECRET>', 'notify_cron_secret');`, rồi chạy `supabase/migrations/0004_limit_and_push.sql` (sửa URL trong file nếu project khác).
+5. Deploy function gửi thông báo, rồi deploy lại web (`npm run deploy`):
+
+   ```bash
+   npx supabase functions deploy notify --no-verify-jwt
+   ```
+
+Trên mỗi điện thoại: mở app **từ màn hình chính** → ⚙ **Cài đặt** → **Thông báo đẩy** → bật **Nhận thông báo trên máy này** → **Gửi thử**. iPhone cần iOS 16.4 trở lên.
+
 ## Dùng hằng ngày
 
 - Hàng chip trên cùng lọc theo thời gian (Hôm nay, 7 ngày, 30 ngày, Tháng này, Tháng trước, Năm nay, Tùy chọn từ–đến). Bộ lọc áp dụng cho cả 2 tab.
@@ -132,4 +156,6 @@ Nếu có test fail, sửa regex trong `smsParser.ts` rồi deploy lại functio
 - Bấm vào bất kỳ giao dịch nào để xem chi tiết, tin nhắn SMS gốc và nút xóa.
 - **Chuyển nội bộ**: một khoản chi và một khoản nhận cùng số tiền, ở hai tài khoản khác nhau, cách nhau dưới 15 phút được coi là chuyển giữa các tài khoản của bạn. Chúng vẫn hiện trong sổ (in mờ, gạch ngang) nhưng không tính vào tổng nhận/chi. Nếu app ghép nhầm, hoặc bỏ sót (ví dụ chuyển sang ví không có SMS), mở chi tiết giao dịch để đổi.
 - **Có thể thiếu giao dịch**: số dư trước + số tiền giao dịch phải bằng số dư sau. Nếu hai SMS liên tiếp của cùng một tài khoản không khớp, Tổng quan hiện số tiền bị thiếu và khoảng thời gian. Bấm **Thêm giao dịch này** để nhập tay (đã điền sẵn), hoặc **Bỏ qua** (chỉ ẩn trên máy đang dùng).
+- **Hạn mức chi tháng** (⚙ Cài đặt): khi đặt, Tổng quan hiện thanh tiến độ của tháng hiện tại và số tiền còn được chi mỗi ngày. Để trống thì không hiện và không cảnh báo.
+- **Thông báo đẩy** (⚙ Cài đặt, bật riêng từng máy): khi chi tới 80% và vượt hạn mức, khoản chi lớn từ mức bạn đặt, khi có thể thiếu giao dịch, và tóm tắt tuần 20:00 Chủ nhật. Thông báo theo SMS được gửi sau khoảng 1 phút, để chuyển khoản nội bộ kịp ghép cặp và không báo nhầm.
 - SMS mà bộ đọc không hiểu vẫn được lưu trong bảng `raw_messages` (status `failed`), nhưng app không hiển thị chúng.

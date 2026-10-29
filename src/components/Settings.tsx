@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { shortDay, dayKey, timeLabel } from '../lib/format';
 import { IconLogout } from './Icons';
+import { disablePush, enablePush, pushDiagnostics, pushSupport, sendTestPush } from '../lib/push';
+import {
+  DEFAULT_SETTINGS,
+  loadDevices,
+  loadSettingsData,
+  saveSettings,
+  type Device,
+  type SettingsData,
+  type UserSettings,
+} from '../lib/userSettings';
 
 const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ingest-sms`;
 
 type Platform = 'ios' | 'android';
-
-interface Device {
-  id: string;
-  label: string;
-  created_at: string;
-  last_used_at: string | null;
-}
 
 interface NewToken {
   label: string;
@@ -27,27 +30,47 @@ async function sha256Hex(text: string): Promise<string> {
 
 const when = (iso: string) => `${shortDay(dayKey(iso))} ${timeLabel(iso)}`;
 
-/** Account, and the phones allowed to forward this member's SMS. */
-export function Settings({ onClose }: { onClose: () => void }) {
-  const [email, setEmail] = useState('');
-  const [devices, setDevices] = useState<Device[]>([]);
+/**
+ * Account, limit, notifications, and the phones allowed to forward this member's SMS.
+ * `initial` is prefetched by the app so the sheet opens complete; it is null only if opened before that finished.
+ */
+export function Settings({ initial, onClose }: { initial: SettingsData | null; onClose: () => void }) {
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [devices, setDevices] = useState<Device[] | null>(initial?.devices ?? null);
   const [label, setLabel] = useState('');
   const [platform, setPlatform] = useState<Platform>('ios');
   const [created, setCreated] = useState<NewToken | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('ingest_tokens')
-      .select('id, label, created_at, last_used_at')
-      .order('created_at', { ascending: false });
-    setDevices((data ?? []) as Device[]);
-  }, []);
+  const [prefs, setPrefs] = useState<UserSettings | null>(initial?.prefs ?? null);
+  const [pushOn, setPushOn] = useState(initial?.pushOn ?? false);
+  const [saved, setSaved] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ''));
-    load();
-  }, [load]);
+    if (initial) return;
+    loadSettingsData().then((d) => {
+      setEmail(d.email);
+      setDevices(d.devices);
+      setPrefs(d.prefs);
+      setPushOn(d.pushOn);
+    });
+  }, [initial]);
+
+  const load = () => loadDevices().then(setDevices);
+
+  async function update(patch: Partial<UserSettings>) {
+    const next = { ...(prefs ?? DEFAULT_SETTINGS), ...patch };
+    setPrefs(next);
+    const err = await saveSettings(next);
+    setSaved(err ?? 'Đã lưu');
+    setTimeout(() => setSaved(null), 1500);
+  }
+
+  async function signOut() {
+    if (!confirm('Đăng xuất?')) return;
+    // Otherwise this phone would keep getting the previous member's notifications.
+    await disablePush().catch(() => {});
+    await supabase.auth.signOut();
+  }
 
   async function createToken() {
     const name = label.trim() || (platform === 'ios' ? 'iPhone' : 'Android');
@@ -82,15 +105,37 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <p className="section-label">Tài khoản</p>
           <div className="settings-row">
             <span className="ellipsis">{email}</span>
-            <button className="link danger-link" onClick={() => confirm('Đăng xuất?') && supabase.auth.signOut()}>
+            <button className="link danger-link" onClick={signOut}>
               <IconLogout size={16} /> Đăng xuất
             </button>
           </div>
         </section>
 
+        {prefs && (
+          <section className="settings-block">
+            <p className="section-label">
+              Hạn mức chi tháng {saved && <span className="saved">· {saved}</span>}
+            </p>
+            <MoneyInput
+              label="Số tiền tối đa mỗi tháng"
+              value={prefs.monthly_limit}
+              placeholder="Không đặt hạn mức"
+              onCommit={(v) => update({ monthly_limit: v })}
+            />
+            <p className="muted small">
+              Để trống nếu không muốn đặt hạn mức: khi đó app không hiện thanh hạn mức và không cảnh báo gì. Chuyển khoản giữa
+              các tài khoản của bạn không bị tính.
+            </p>
+          </section>
+        )}
+
+        {prefs && <PushSettings prefs={prefs} enabled={pushOn} setEnabled={setPushOn} onChange={update} />}
+
         <section className="settings-block">
           <p className="section-label">Điện thoại gửi SMS</p>
-          {devices.length === 0 ? (
+          {devices === null ? (
+            <p className="muted small">Đang tải…</p>
+          ) : devices.length === 0 ? (
             <p className="muted small">Chưa có. Thêm điện thoại bên dưới để SMS tự vào app.</p>
           ) : (
             <ul className="device-list">
@@ -228,6 +273,152 @@ function TokenSetup({ created, onDone }: { created: NewToken; onDone: () => void
       <button className="primary" onClick={onDone}>
         Xong
       </button>
+    </section>
+  );
+}
+
+/** Amount field that saves when the user leaves it; empty means "not set". */
+function MoneyInput(props: {
+  label: string;
+  value: number | null;
+  placeholder: string;
+  onCommit: (v: number | null) => void;
+}) {
+  const fmt = (v: number | null) => (v ? v.toLocaleString('vi-VN') : '');
+  const [text, setText] = useState(fmt(props.value));
+  return (
+    <label>
+      {props.label}
+      <span className="money-input">
+        <input
+          inputMode="numeric"
+          value={text}
+          placeholder={props.placeholder}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/D/g, '');
+            setText(digits ? Number(digits).toLocaleString('vi-VN') : '');
+          }}
+          onBlur={() => {
+            const v = Number(text.replace(/D/g, '')) || null;
+            if (v !== props.value) props.onCommit(v);
+          }}
+        />
+        <span>₫</span>
+      </span>
+    </label>
+  );
+}
+
+function Toggle(props: { label: string; hint?: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className={`toggle-row${props.disabled ? ' disabled' : ''}`}>
+      <span>
+        {props.label}
+        {props.hint && <small className="muted">{props.hint}</small>}
+      </span>
+      <input
+        type="checkbox"
+        role="switch"
+        className="switch"
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={(e) => props.onChange(e.target.checked)}
+      />
+    </label>
+  );
+}
+
+/** "Do you want push notifications": per device on/off, then which alerts (shared by all the member's devices). */
+function PushSettings(props: {
+  prefs: UserSettings;
+  enabled: boolean;
+  setEnabled: (v: boolean) => void;
+  onChange: (p: Partial<UserSettings>) => void;
+}) {
+  const { prefs, enabled, setEnabled, onChange } = props;
+  const support = pushSupport();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function toggle(on: boolean) {
+    setBusy(true);
+    setMessage(null);
+    if (on) {
+      const err = await enablePush().catch((e: Error) => e.message);
+      if (err) setMessage(err);
+      setEnabled(!err);
+    } else {
+      await disablePush();
+      setEnabled(false);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <section className="settings-block">
+      <p className="section-label">Thông báo đẩy</p>
+      {support === 'needs-home-screen' && (
+        <div className="warn">
+          <p>
+            App đang chạy như một trang web trong Safari nên iPhone chưa cho bật thông báo. Cài lại thành ứng dụng:
+          </p>
+          <ol className="steps">
+            <li>Xóa biểu tượng app hiện tại trên màn hình chính.</li>
+            <li>
+              Mở <b>quanly-chitieu.pages.dev</b> bằng <b>Safari</b> → nút <b>Chia sẻ</b> → <b>Thêm vào MH chính</b>.
+            </li>
+            <li>
+              Bật <b>Mở dưới dạng ứng dụng web</b> (Open as Web App) → <b>Thêm</b>.
+            </li>
+            <li>Mở app từ biểu tượng mới, đăng nhập lại rồi vào đây bật thông báo.</li>
+          </ol>
+        </div>
+      )}
+      {support === 'unsupported' && <p className="muted small">Máy hoặc trình duyệt này chưa bật được thông báo đẩy.</p>}
+      {support !== 'ok' && <p className="muted small diag">{pushDiagnostics()}</p>}
+      {support === 'ok' && (
+        <>
+          <div className="toggle-list">
+            <Toggle label="Nhận thông báo trên máy này" checked={enabled} disabled={busy} onChange={toggle} />
+          </div>
+          {message && <p className="login-error">{message}</p>}
+          {enabled && (
+            <>
+              <div className="toggle-list">
+                <Toggle
+                  label="Khi chi tới 80% và khi vượt hạn mức"
+                  hint={prefs.monthly_limit ? undefined : 'Cần đặt hạn mức chi tháng ở trên'}
+                  checked={!!prefs.monthly_limit && prefs.notify_limit}
+                  disabled={!prefs.monthly_limit}
+                  onChange={(v) => onChange({ notify_limit: v })}
+                />
+                <Toggle
+                  label="Khi có thể thiếu giao dịch"
+                  hint="Số dư trong SMS không khớp"
+                  checked={prefs.notify_gaps}
+                  onChange={(v) => onChange({ notify_gaps: v })}
+                />
+                <Toggle
+                  label="Tóm tắt tuần"
+                  hint="20:00 tối Chủ nhật"
+                  checked={prefs.notify_weekly}
+                  onChange={(v) => onChange({ notify_weekly: v })}
+                />
+              </div>
+              <MoneyInput
+                label="Báo khi có khoản chi từ"
+                value={prefs.big_spend_threshold}
+                placeholder="Không báo khoản chi lớn"
+                onCommit={(v) => onChange({ big_spend_threshold: v })}
+              />
+              <div className="row">
+                <button onClick={async () => setMessage(await sendTestPush())}>Gửi thử</button>
+              </div>
+              <p className="muted small">Các lựa chọn trên áp dụng cho mọi máy bạn đã bật thông báo.</p>
+            </>
+          )}
+        </>
+      )}
     </section>
   );
 }

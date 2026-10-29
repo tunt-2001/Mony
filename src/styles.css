@@ -21,6 +21,7 @@
   --out-soft: #fdece4;
   --grid: #edf0f4;
   --danger: #d03b3b;
+  --warn: #b45309;
   --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.06);
   --radius: 18px;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
@@ -47,6 +48,8 @@
     --in-soft: rgb(25 158 112 / 0.16);
     --out-soft: rgb(217 89 38 / 0.16);
     --grid: #22262f;
+    --warn: #f5b74a;
+    --danger: #f87171;
     --shadow: none;
   }
 }
@@ -1226,4 +1229,172 @@ label {
 .gap-list .form {
   padding: 12px;
   box-shadow: none;
+}
+
+/* ---------- Monthly limit ---------- */
+.limit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.limit-head h2 {
+  margin: 0;
+}
+
+.limit-head strong {
+  font-size: 18px;
+}
+
+.limit-bar {
+  height: 10px;
+  margin: 10px 0 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.limit-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.limit-card.near .limit-bar span {
+  background: var(--warn);
+}
+
+.limit-card.near .limit-head strong {
+  color: var(--warn);
+}
+
+.limit-card.over .limit-bar span {
+  background: var(--danger);
+}
+
+.limit-card.over .limit-head strong {
+  color: var(--danger);
+}
+
+.limit-line {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- Settings: amounts and switches ---------- */
+.saved {
+  font-weight: 500;
+  color: var(--in);
+}
+
+.money-input {
+  position: relative;
+  display: block;
+}
+
+.money-input input {
+  padding-right: 32px;
+}
+
+.money-input > span {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+}
+
+.toggle-list {
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.toggle-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.toggle-row:first-child {
+  border-top: none;
+}
+
+.toggle-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-row small {
+  font-size: 12px;
+}
+
+.toggle-row.disabled > span {
+  opacity: 0.55;
+}
+
+input.switch {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+input.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s;
+}
+
+input.switch:checked {
+  background: var(--in-fill);
+}
+
+input.switch:checked::after {
+  transform: translateX(18px);
+}
+
+input.switch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+input.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.warn p {
+  margin: 0 0 6px;
+}
+
+.warn .steps {
+  margin: 0;
+}
+
+.diag {
+  font-size: 11px;
 }
